@@ -13,6 +13,23 @@ model:
   xg_weight: 0.5        # blend: 0.5 * xG/90 + 0.5 * goals/90
   goals_weight: 0.5
   min_minutes: 180      # minimum minutes for a rate to be reliable
+  # Fraction of a national team's goals scored by its top-3 modelled players.
+  # The rest (~0.35) is scored by other XI players, subs, and own goals.
+  # Used to scale within-top3 club-rate shares into shares of ALL team goals.
+  top_group_goal_share: 0.65
+  default_expected_minutes: 85   # for first-choice players w/o appearance data
+
+features:
+  # Avg minutes/appearance below this flags a rotation/bench risk (not dropped).
+  starter_minutes_threshold: 60
+
+opponent:
+  # International results (free, no account). football-data.co.uk has NO
+  # international matches, so we use the public martj42 dataset instead.
+  results_url: "https://raw.githubusercontent.com/martj42/international_results/master/results.csv"
+  history_start: "2015-01-01"   # window for attack/defence rating estimation
+  recent_halflife_days: 547     # ~1.5y exponential decay on match weights
+  home_advantage_goals: 0.35    # additive goal bump for the true home side
 
 validation:
   train_cutoff: "2022-11-01"
