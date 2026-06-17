@@ -1,0 +1,8 @@
+team,player_name,club,position,goals_per90,xg_per90,total_minutes,source_note
+Argentina,Lionel Messi,Inter Miami,F,0.90,0.90,4300,"43 goals / 49 apps 2025 MLS (~4300 min); ESPN Messi tracker 2025. xG unavailable -> xg=goals fallback."
+Portugal,Cristiano Ronaldo,Al-Nassr,F,0.88,0.88,2550,"25 goals / 30 apps 2024-25 Saudi Pro League (~2550 min); SPL top scorer. xG unavailable -> xg=goals fallback."
+Ecuador,Enner Valencia,Pachuca,F,0.46,0.46,986,"5 goals / 986 min 2025-26 Liga MX; Transfermarkt. Ecuador all-time top scorer (46 intl goals). xG unavailable."
+Costa Rica,Manfred Ugalde,Spartak Moscow,F,0.64,0.64,2400,"17 goals / ~2400 min (26 starts) 2024-25 Russian Premier League; Wikipedia/Sofascore. xG unavailable."
+Saudi Arabia,Firas Al-Buraikan,Al-Ahli,F,0.35,0.35,2200,"5 league goals 2024-25 SPL; Saudi NT first-choice striker. Rate estimated from club+intl form. xG unavailable."
+Panama,Ismael Diaz,Club deportivo,F,0.40,0.40,1800,"2025 Concacaf Gold Cup top scorer (6 goals); Panama standout 2025. Rate estimated from intl form. xG unavailable."
+Australia,Mitch Duke,Machida Zelvia,F,0.30,0.30,2000,"J-League striker, Australia first-choice No.9; modest J1 scoring. Rate estimated. xG unavailable."
