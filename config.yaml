@@ -1,0 +1,22 @@
+project:
+  name: soccer-goals-wc2026
+  tournament: FIFA World Cup 2026
+  group_stage_end: "2026-06-27"
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  player_universe: data/player_universe.csv
+
+model:
+  top_n_players_per_team: 3
+  xg_weight: 0.5        # blend: 0.5 * xG/90 + 0.5 * goals/90
+  goals_weight: 0.5
+  min_minutes: 180      # minimum minutes for a rate to be reliable
+
+validation:
+  train_cutoff: "2022-11-01"
+  backtest_tournament: Qatar 2022
+
+predictions:
+  output_dir: predictions
