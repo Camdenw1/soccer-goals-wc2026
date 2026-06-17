@@ -17,6 +17,10 @@ model:
   # The rest (~0.35) is scored by other XI players, subs, and own goals.
   # Used to scale within-top3 club-rate shares into shares of ALL team goals.
   top_group_goal_share: 0.65
+  # Assumed blended goals/90 of an unmodelled top-3 slot, used to pad the
+  # goal-share denominator for teams with <top_n modelled players (so a lone
+  # striker doesn't absorb the whole top-group share).
+  missing_slot_rate: 0.25
   default_expected_minutes: 85   # for first-choice players w/o appearance data
 
 features:
