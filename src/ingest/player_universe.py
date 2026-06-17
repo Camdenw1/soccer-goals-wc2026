@@ -12,12 +12,59 @@ The output CSV has columns:
 """
 
 import logging
+import re
+import unicodedata
 from pathlib import Path
 
 import pandas as pd
 import yaml
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_name(name: str) -> str:
+    """
+    Canonicalize a player name for matching across sources.
+
+    Understat is inconsistent: it keeps accents for some players (Lautaro
+    Martínez) but strips them for others (Vlahovic, Modric). It also uses
+    Western token order for Korean names (Hee-Chan Hwang, Son Heung-Min).
+
+    We strip diacritics, lowercase, replace punctuation/hyphens with spaces,
+    and collapse whitespace so both sides compare on a common form.
+    """
+    if not isinstance(name, str):
+        return ""
+    # Decompose accents and drop the combining marks
+    nfkd = unicodedata.normalize("NFKD", name)
+    no_accents = "".join(c for c in nfkd if not unicodedata.combining(c))
+    # Hyphens/punctuation -> space, lowercase
+    cleaned = re.sub(r"[^a-zA-Z\s]", " ", no_accents).lower()
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _name_keys(name: str):
+    """
+    Return the set of normalized lookup keys for a name, covering common
+    Eastern/Western surname-position swaps:
+
+      - the normalized form itself
+      - full token reversal  ('son heung min' <-> 'min heung son')
+      - rotate last token to front  ('hee chan hwang' -> 'hwang hee chan')
+      - rotate first token to back  ('hwang hee chan' -> 'hee chan hwang')
+
+    The two rotations (not just reversal) are what correctly match 3-token
+    Korean names where the surname is a single token and the given name is
+    hyphenated, e.g. data 'Hee-Chan Hwang' vs map 'Hwang Hee-chan'.
+    """
+    norm = normalize_name(name)
+    keys = {norm}
+    tokens = norm.split()
+    if len(tokens) > 1:
+        keys.add(" ".join(reversed(tokens)))
+        keys.add(" ".join([tokens[-1]] + tokens[:-1]))  # last -> front
+        keys.add(" ".join(tokens[1:] + [tokens[0]]))    # first -> back
+    return keys
 
 # Hand-curated WC2026 squad key players (top ~5 per nation from known squads)
 # Keyed by player_name AS IT APPEARS in Understat data.
@@ -127,10 +174,15 @@ NATIONALITY_MAP = {
     "Leroy Sané": "Germany",
     "Niclas Füllkrug": "Germany",
 
-    # Haiti": no top big-5 scorers
+    # Albania (Big-5 forward)
+    "Armando Broja": "Albania",
+
+    # South Africa (Big-5 forward)
+    "Lyle Foster": "South Africa",
 
     # Honduras
     "Alberth Elis": "Honduras",
+    "Anthony Lozano": "Honduras",
 
     # Iran
     "Mehdi Taremi": "Iran",
@@ -313,9 +365,27 @@ def build_player_universe(
     """
     df = pd.read_parquet(rates_path)
 
-    # Attach nationality
-    df["team"] = df["player_name"].map(NATIONALITY_MAP)
+    # Build a normalized-name -> nation lookup from the curated map.
+    norm_map = {}
+    for raw_name, nation in NATIONALITY_MAP.items():
+        for key in _name_keys(raw_name):
+            norm_map[key] = nation
+
+    # Attach nationality via normalized matching (accent/case/order-robust).
+    def _lookup(name):
+        for key in _name_keys(name):
+            if key in norm_map:
+                return norm_map[key]
+        return None
+
+    df["team"] = df["player_name"].apply(_lookup)
     wc = df[df["team"].notna()].copy()
+    wc["manual_source"] = False
+
+    # Merge the hand-curated supplement (uncovered nations + non-Big-5 stars).
+    supp = load_supplement()
+    if supp is not None and len(supp):
+        wc = pd.concat([wc, supp], ignore_index=True)
 
     # For any team, if we have <3 players in the data, we'll note the gap
     # but don't pad — partial data is honest.
@@ -332,11 +402,12 @@ def build_player_universe(
 
     missing_teams = WC2026_NATIONS - set(top["team"].unique())
     if missing_teams:
-        logger.warning("No Understat data found for: %s", sorted(missing_teams))
+        logger.warning("Still no data (Big-5 or supplement) for: %s", sorted(missing_teams))
 
     cols = [
         "team", "rank_in_team", "player_name", "club", "position",
-        "goals_per90", "xg_per90", "blended_per90", "xg_imputed", "total_minutes",
+        "goals_per90", "xg_per90", "blended_per90", "xg_imputed",
+        "manual_source", "total_minutes",
     ]
     universe = top[cols].sort_values(["team", "rank_in_team"]).reset_index(drop=True)
 
@@ -344,6 +415,38 @@ def build_player_universe(
     universe.to_csv(output_path, index=False)
     logger.info("Saved player universe to %s", output_path)
     return universe
+
+
+SUPPLEMENT_PATH = "data/manual_player_rates.csv"
+
+
+def load_supplement(path: str = SUPPLEMENT_PATH) -> pd.DataFrame:
+    """
+    Load the hand-curated supplement for players outside the Big-5 leagues
+    (e.g. Messi/MLS, Ronaldo/Saudi) and nations with no Big-5 representation.
+
+    Every row here is manually sourced from public stats and flagged with
+    manual_source=True and xg_imputed=True (no shot-level xG available). The
+    rate columns are expected to be pre-computed per-90 values. Each row should
+    cite its source in the `source_note` column for reproducibility.
+
+    Required columns: team, player_name, club, position, goals_per90,
+    xg_per90, total_minutes, source_note.
+    """
+    p = Path(path)
+    if not p.exists():
+        logger.info("No supplement file at %s — skipping.", path)
+        return None
+    supp = pd.read_csv(p)
+    if supp.empty:
+        return None
+    # xG is never truly available for these rows; blend still uses the
+    # supplied xg_per90 (often a proxy = goals_per90 or a positional prior).
+    supp["blended_per90"] = 0.5 * supp["goals_per90"] + 0.5 * supp["xg_per90"]
+    supp["xg_imputed"] = True
+    supp["manual_source"] = True
+    logger.info("Loaded %d manual supplement rows from %s", len(supp), path)
+    return supp
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
